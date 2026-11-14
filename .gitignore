@@ -1,0 +1,51 @@
+# ---------------------------------------------------------------------------
+#  Buyuk ikili dosyalar (setup.ps1 ile indirilir, depoya konmaz)
+# ---------------------------------------------------------------------------
+/models/
+/llama/
+/tts/piper/
+/tts/*.onnx
+/tts/*.onnx.json
+
+# Arsivler ve model agirliklari
+*.zip
+*.tar.gz
+*.7z
+*.gguf
+*.onnx
+*.bin
+
+# ---------------------------------------------------------------------------
+#  Uretilen ciktilar
+# ---------------------------------------------------------------------------
+/output/*
+!/output/.gitkeep
+
+/samples/*
+!/samples/.gitkeep
+!/samples/README.md
+
+# Ses / gecici
+*.wav
+*.mp3
+*.m4a
+*.flac
+*.txt
+!KULLANIM.md
+!LICENSE
+!samples/README.md
+
+# ---------------------------------------------------------------------------
+#  Sistem / editor
+# ---------------------------------------------------------------------------
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+*.lnk
+.DS_Store
+.vscode/
+.idea/
+*.swp
+*.tmp
+~$*

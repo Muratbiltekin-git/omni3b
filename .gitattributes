@@ -1,0 +1,25 @@
+# Otomatik satir sonu normalizasyonu
+* text=auto
+
+# Windows betikleri CRLF olmali
+*.cmd  text eol=crlf
+*.bat  text eol=crlf
+*.ps1  text eol=crlf
+*.psm1 text eol=crlf
+
+# Dokumantasyon / yapilandirma
+*.md   text eol=lf
+*.gitignore text eol=lf
+*.gitattributes text eol=lf
+
+# Ikili dosyalar
+*.gguf binary
+*.onnx binary
+*.wav  binary
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.gif  binary
+*.zip  binary
+*.exe  binary
+*.dll  binary
