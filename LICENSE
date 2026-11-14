@@ -19,26 +19,3 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
-
-================================================================================
-BU LISANS YALNIZCA BU DEPODAKI KODU ( .ps1, .cmd, .md dosyalari ) KAPSAR.
-Bahsi gecen model agirliklari, calistirilabilir dosyalar ve ses modelleri bu
-depoda DAGITILMAZ; setup.ps1 ile ucuncu taraflardan indirilir ve kendi
-lisanslari gecerlidir:
-
-  * Qwen2.5-Omni-3B  - Alibaba Qwen ekibi - Apache License 2.0
-    https://huggingface.co/ggml-org/Qwen2.5-Omni-3B-GGUF
-
-  * llama.cpp        - MIT License
-    https://github.com/ggml-org/llama.cpp
-
-  * Piper TTS        - MIT License
-    https://github.com/rhasspy/piper
-
-  * tr_TR-dfki-medium (Piper Turkce sesi)
-      Ses modeli DFKI veri seti uzerinde egitilmistir.
-      Veri seti lisansi: CC BY-NC-SA 4.0
-      https://creativecommons.org/licenses/by-nc-sa/4.0/
-      -> Yalnizca ticari olmayan kullanim. Bu kosul ses modeli icin
-         gecerlidir, bu depodaki kod icin degildir.
-================================================================================

@@ -208,6 +208,7 @@ omni3b\
 ## Lisans ve krediler
 
 Bu depodaki **kod** MIT lisanslıdır — bkz. [LICENSE](LICENSE).
+Üçüncü taraf bileşenlerin tam lisans metinleri: [NOTICE.md](NOTICE.md).
 
 Model ağırlıkları ve çalıştırılabilir dosyalar depoda **dağıtılmaz**, `setup.ps1` ile
 kaynağından indirilir. Kendi lisansları geçerlidir:
