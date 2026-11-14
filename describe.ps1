@@ -5,11 +5,17 @@
 #   .\describe.ps1 -Image "foto.jpg" -Tone sakin
 #   .\describe.ps1 -Image "foto.jpg" -Tone enerjik -Repeat 2
 #   .\describe.ps1 -Image "foto.jpg" -Tone dramatik -Question "Bu manzara neresi?"
+#   .\describe.ps1 -Image "foto.jpg" -Style "Kisa ve esprili konusurum, renkleri onemserim."
 #   .\describe.ps1 -ListTones
+#
+# Kisisel tarz: proje klasorundeki "benim-tarzim.txt" dosyasi varsa otomatik
+# kullanilir. -NoStyle ile bu seferlik yok sayilir.
 
 param(
     [string]$Image,
     [string]$Question = "Bu görselde ne var? En fazla iki cümleyle, doğal konuşma dilinde Türkçe anlat.",
+    [string]$Style,
+    [switch]$NoStyle,
     [ValidateSet("normal", "sakin", "hizli", "enerjik", "yavas", "dramatik", "sunucu", "cocuk")]
     [string]$Tone = "normal",
     [switch]$NoPlay,
@@ -59,6 +65,27 @@ $llama  = Join-Path $root "llama\llama-mtmd-cli.exe"
 $piper  = Join-Path $root "tts\piper\piper.exe"
 $voice  = Join-Path $root "tts\tr_TR-dfki-medium.onnx"
 
+# ---------------------------------------------------------------------------
+# Kisisel anlatim tarzi
+#   Oncelik: -Style parametresi  >  benim-tarzim.txt  >  tarz yok
+# ---------------------------------------------------------------------------
+$styleFile = Join-Path $root "benim-tarzim.txt"
+$styleText = ""
+if (-not $NoStyle) {
+    if (-not [string]::IsNullOrWhiteSpace($Style)) {
+        $styleText = ($Style -replace '\s+', ' ').Trim()
+    } elseif (Test-Path $styleFile) {
+        $styleText = ((Get-Content $styleFile -Encoding UTF8 -Raw) -replace '\s+', ' ').Trim()
+    }
+}
+
+$rules = "Kurallar: en fazla iki cümle, doğal konuşma dili, Türkçe. 'Görselde', 'resimde', 'fotoğrafta' diye başlama."
+$promptParts = @("Sen kullanıcının ağzından konuşuyorsun.")
+if ($styleText) { $promptParts += "Kullanıcının anlatım tarzı: $styleText" }
+$promptParts += "Görev: $Question"
+$promptParts += $rules
+$promptText = ($promptParts -join " ")
+
 foreach ($f in @($llama, $model, $mmproj, $piper, $voice)) {
     if (-not (Test-Path $f)) { throw "Eksik dosya: $f" }
 }
@@ -99,6 +126,7 @@ $t = $Tones[$Tone]
 
 # ---------- 1) Gorsel -> metin ----------
 Write-Host "[1/4] Gorsel analiz ediliyor..." -ForegroundColor Cyan
+if ($styleText) { Write-Host "      Tarz: $styleText" -ForegroundColor DarkGray }
 
 $tmpDir = Join-Path $env:TEMP ("omni3b-" + [guid]::NewGuid().ToString("N"))
 New-Item -ItemType Directory -Force -Path $tmpDir | Out-Null
@@ -107,7 +135,7 @@ $outFile    = Join-Path $tmpDir "out.txt"
 $errFile    = Join-Path $tmpDir "err.txt"
 
 # Turkce karakterler komut satirinda bozulmasin diye prompt dosyadan veriliyor
-[System.IO.File]::WriteAllText($promptFile, $Question, (New-Object System.Text.UTF8Encoding($false)))
+[System.IO.File]::WriteAllText($promptFile, $promptText, (New-Object System.Text.UTF8Encoding($false)))
 
 $args1 = @(
     "-m", "`"$model`"", "--mmproj", "`"$mmproj`"",

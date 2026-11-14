@@ -66,6 +66,28 @@ cd omni3b
 
 Çıktılar `output\anlatim-<ton>-<tarih>.wav` ve `.txt` olarak kaydedilir.
 
+## Kendi ağzınızdan anlatım
+
+Arayüzde **ANLATIM TARZIM** kutusu var. Buraya kendi üslubunuzu ve neyi önemsediğinizi
+yazın; model görseli **sizin ağzınızdan** anlatır. Kutu kalıcıdır — yazdığınız metin
+`benim-tarzim.txt` dosyasına kaydedilir, sonraki açılışta geri gelir.
+
+Örnekler:
+
+| Amaç | Yazılacak tarz |
+|---|---|
+| Kısa ve net | `Kısa ve net konuşurum, en fazla iki cümle söylerim.` |
+| Samimi / esprili | `Samimi ve esprili konuşurum, "bence" demeyi severim.` |
+| Alışveriş | `Fiyatları, markaları ve ürün adlarını mutlaka söylerim.` |
+| Yemek | `Malzemeleri, porsiyonu ve sunumu anlatırım.` |
+| Erişilebilirlik | `Renkleri, konumları, sayıları ve yazıları ayrıntılı betimlerim.` |
+
+- Kutuyu **boş bırakırsanız** `benim-tarzim.txt` silinir, sade anlatım kullanılır.
+- **SORU / YÖNERGE** kutusu tek seferliktir; ikisi birlikte modele verilir.
+- Komut satırında: `.\describe.ps1 -Image foto.jpg -Style "..."` veya tarzı yok saymak
+  için `-NoStyle`.
+- Hazır örnek: `benim-tarzim.ornek.txt` dosyasını `benim-tarzim.txt` olarak kopyalayın.
+
 ## Tonlar
 
 | Ton | Karakter | Konuşma hızı | Varyasyon | Perde |
@@ -135,6 +157,8 @@ omni3b\
 ├── output\           üretilen .wav ve .txt dosyaları
 ├── gui.ps1           arayüz (WinForms)
 ├── describe.ps1      komut satırı hattı (ton destekli)
+├── benim-tarzim.ornek.txt  tarz dosyası örneği
+├── benim-tarzim.txt  kişisel tarzınız (arayüz oluşturur)
 ├── anlat.cmd         çift tık → arayüz / argümanlı → CLI
 ├── tonlar.cmd        ton listesi
 └── tonlari-dene.cmd  tüm tonları karşılaştır

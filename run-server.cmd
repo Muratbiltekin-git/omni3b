@@ -1,6 +1,6 @@
 @echo off
 REM Tarayicidan sohbet arayuzu: http://127.0.0.1:8080
-REM Gorsel veya ses eklemek icin arayuzdeki ataç butonunu kullanin.
+REM Gorsel eklemek icin arayuzdeki atac butonunu kullanin.
 setlocal
 set ROOT=%~dp0
 "%ROOT%llama\llama-server.exe" ^

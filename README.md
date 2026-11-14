@@ -21,7 +21,9 @@ Görsel  ──▶  Qwen2.5-Omni-3B (GGUF / llama.cpp)  ──▶  Türkçe meti
 
 - **Çift tıklanabilir arayüz** — `anlat.cmd`'ye çift tıklayın, WinForms arayüzü açılır.
 - **8 konuşma tonu** — sakin, hızlı, dramatik, çocuk sesi vb.
-- **Konuşma süresi kontrolü (1–50 sn).
+- **Kendi ağzınızdan anlatım** — kalıcı "Anlatım Tarzım" kutusu; neyi önemsediğinizi bir kez
+  yazın, her görselde o üslupla konuşsun.
+- **Konuşma süresi kontrolü (1–50 sn)** — hedef süreye otomatik oturtulur, perde bozulmaz.
 - **Akıllı akış** — model sadece bir kez çalışır; ton/süre değiştirince metin yeniden
   üretilmeden **anında** yeni ses çıkar.
 - **Çevrimdışı ve özel** — bulut yok, API anahtarı yok, telemetri yok.
@@ -82,6 +84,25 @@ Seçenekler:
 4. **ANLAT VE DİNLE** → model görseli analiz eder ve seslendirir
 5. Tonu/süreyi değiştirip **"Bu tonla seslendir"** → model tekrar çalışmadan yeni ses üretilir
 
+### Kendi ağzınızdan anlatım
+
+Arayüzdeki **ANLATIM TARZIM** kutusuna kendi üslubunuzu ve neyi önemsediğinizi yazın.
+Bu kutu **kalıcıdır**: yazdığınız metin `benim-tarzim.txt` dosyasına kaydedilir ve bir
+sonraki açılışta geri gelir. Model, görseli sizin ağzınızdan anlatır.
+
+Örnek tarzlar:
+
+| Amaç | Yazılacak tarz |
+|---|---|
+| Kısa ve net | `Kısa ve net konuşurum. En fazla iki cümle söylerim.` |
+| Samimi / esprili | `Samimi ve esprili konuşurum, "bence" demeyi severim.` |
+| Alışveriş odağı | `Fiyatları, markaları ve ürün adlarını mutlaka söylerim.` |
+| Yemek odağı | `Malzemeleri, porsiyonu ve sunumu anlatırım.` |
+| Erişilebilirlik | `Renkleri, konumları, sayıları ve yazıları ayrıntılı betimlerim.` |
+
+Tek seferlik bir yönerge için alttaki **SORU / YÖNERGE** kutusunu kullanın; ikisi birlikte
+modele verilir. Tarz kutusunu boş bırakırsanız tarz dosyası silinir ve sade anlatım kullanılır.
+
 ### Komut satırı ile de çalıştırabilirsin
 
 ```powershell
@@ -90,6 +111,13 @@ Seçenekler:
 .\anlat.cmd foto.jpg enerjik "Bu yemekte ne var?"   # ton + kendi sorunuz
 .\tonlar.cmd                                  # tonları listele
 .\tonlari-dene.cmd foto.jpg                   # aynı metni 8 tonla üret (karşılaştırma)
+```
+
+`benim-tarzim.txt` varsa komut satırında da otomatik kullanılır:
+
+```powershell
+.\describe.ps1 -Image foto.jpg -Style "Kısa ve esprili konuşurum, fiyatları söylerim."
+.\describe.ps1 -Image foto.jpg -NoStyle        # tarzı yok say, sade anlat
 ```
 
 Çıktılar `output\anlatim-<ton>-<tarih>.wav` ve aynı isimli `.txt` olarak kaydedilir.
