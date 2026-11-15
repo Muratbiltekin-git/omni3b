@@ -26,6 +26,50 @@ $outDir = Join-Path $root "output"
 $styleFile = Join-Path $root "benim-tarzim.txt"
 
 # ---------------------------------------------------------------------------
+# YAZI TIPI
+#   Windows'ta bulunan en temiz arayuz yazi tipini sec; yoksa Segoe UI'ye dus.
+#   Segoe UI Variable (Win11) -> Segoe UI (Win10) -> Tahoma
+# ---------------------------------------------------------------------------
+$script:installedFonts = @(
+    (New-Object System.Drawing.Text.InstalledFontCollection).Families | ForEach-Object { $_.Name }
+)
+
+function Resolve-UiFont([string[]]$Candidates) {
+    foreach ($c in $Candidates) {
+        if ($script:installedFonts -contains $c) { return $c }
+    }
+    return "Segoe UI"
+}
+
+$script:fontTextFamily = Resolve-UiFont @("Segoe UI Variable Text", "Segoe UI", "Tahoma")
+$script:fontHeadFamily = Resolve-UiFont @("Segoe UI Variable Display", "Segoe UI Semibold", "Segoe UI", "Tahoma")
+
+function New-UiFont {
+    param(
+        [double]$Size,
+        [System.Drawing.FontStyle]$Style = [System.Drawing.FontStyle]::Regular,
+        [switch]$Display
+    )
+    $fam = if ($Display) { $script:fontHeadFamily } else { $script:fontTextFamily }
+    try {
+        return New-Object System.Drawing.Font($fam, [float]$Size, $Style, [System.Drawing.GraphicsUnit]::Point)
+    } catch {
+        return New-Object System.Drawing.Font("Segoe UI", [float]$Size, $Style, [System.Drawing.GraphicsUnit]::Point)
+    }
+}
+
+# Ortak yazi tipleri
+$fontBody    = New-UiFont 9.5
+$fontSmall   = New-UiFont 8.5
+$fontLabel   = New-UiFont 8 -Style ([System.Drawing.FontStyle]::Bold) -Display
+$fontTitle   = New-UiFont 15 -Style ([System.Drawing.FontStyle]::Bold) -Display
+$fontSub     = New-UiFont 8.5 -Display
+$fontButton  = New-UiFont 9.5 -Style ([System.Drawing.FontStyle]::Bold) -Display
+$fontPreview = New-UiFont 10.5
+$fontStatus  = New-UiFont 9 -Style ([System.Drawing.FontStyle]::Italic)
+$fontHint    = New-UiFont 8
+
+# ---------------------------------------------------------------------------
 # PALET
 # ---------------------------------------------------------------------------
 function New-Palette([bool]$Dark) {
@@ -249,7 +293,7 @@ $form.Size = New-Object System.Drawing.Size(792, 820)
 $form.StartPosition = "CenterScreen"
 $form.FormBorderStyle = "None"
 $form.MaximizeBox = $false
-$form.Font = New-Object System.Drawing.Font("Segoe UI", 9)
+$form.Font = $fontBody
 $form.BackColor = $P.Bg
 
 # --- Ozel baslik cubugu ---
@@ -266,17 +310,24 @@ $accentLine.BackColor = $P.Accent
 $form.Controls.Add($accentLine)
 
 $lblTitle = New-Object System.Windows.Forms.Label
-$lblTitle.Text = "OMNI3B"
-$lblTitle.Location = New-Object System.Drawing.Point(20, 12)
-$lblTitle.Size = New-Object System.Drawing.Size(140, 22)
-$lblTitle.Font = New-Object System.Drawing.Font("Segoe UI Semibold", 12, [System.Drawing.FontStyle]::Bold)
+$lblTitle.Text = "OMNI"
+$lblTitle.Location = New-Object System.Drawing.Point(20, 8)
+$lblTitle.Size = New-Object System.Drawing.Size(72, 28)
+$lblTitle.Font = $fontTitle
 $header.Controls.Add($lblTitle)
 
+$lblBrand = New-Object System.Windows.Forms.Label
+$lblBrand.Text = "3B"
+$lblBrand.Location = New-Object System.Drawing.Point(74, 8)
+$lblBrand.Size = New-Object System.Drawing.Size(60, 28)
+$lblBrand.Font = $fontTitle
+$header.Controls.Add($lblBrand)
+
 $lblSub = New-Object System.Windows.Forms.Label
-$lblSub.Text = "Görsel Anlatıcı"
-$lblSub.Location = New-Object System.Drawing.Point(22, 33)
-$lblSub.Size = New-Object System.Drawing.Size(200, 18)
-$lblSub.Font = New-Object System.Drawing.Font("Segoe UI", 8)
+$lblSub.Text = "GÖRSEL · SES · VİDEO · METİN"
+$lblSub.Location = New-Object System.Drawing.Point(22, 36)
+$lblSub.Size = New-Object System.Drawing.Size(280, 16)
+$lblSub.Font = $fontSub
 $header.Controls.Add($lblSub)
 
 $btnTheme = New-Object System.Windows.Forms.Button
@@ -285,7 +336,7 @@ $btnTheme.Location = New-Object System.Drawing.Point(596, 15)
 $btnTheme.Size = New-Object System.Drawing.Size(78, 28)
 $btnTheme.FlatStyle = "Flat"
 $btnTheme.FlatAppearance.BorderSize = 0
-$btnTheme.Font = New-Object System.Drawing.Font("Segoe UI", 8)
+$btnTheme.Font = $fontSmall
 $btnTheme.Cursor = "Hand"
 $header.Controls.Add($btnTheme)
 
@@ -295,7 +346,7 @@ $btnMin.Location = New-Object System.Drawing.Point(680, 15)
 $btnMin.Size = New-Object System.Drawing.Size(44, 28)
 $btnMin.FlatStyle = "Flat"
 $btnMin.FlatAppearance.BorderSize = 0
-$btnMin.Font = New-Object System.Drawing.Font("Segoe UI", 10)
+$btnMin.Font = New-UiFont 10.5
 $btnMin.Cursor = "Hand"
 $header.Controls.Add($btnMin)
 
@@ -305,25 +356,26 @@ $btnClose.Location = New-Object System.Drawing.Point(728, 15)
 $btnClose.Size = New-Object System.Drawing.Size(44, 28)
 $btnClose.FlatStyle = "Flat"
 $btnClose.FlatAppearance.BorderSize = 0
-$btnClose.Font = New-Object System.Drawing.Font("Segoe UI", 9)
+$btnClose.Font = New-UiFont 9.5
 $btnClose.Cursor = "Hand"
 $header.Controls.Add($btnClose)
 
 # --- Ust satir: gorsel sec ---
 $btnPick = New-Object System.Windows.Forms.Button
-$btnPick.Text = "Görsel Seç"
+$btnPick.Text = "Dosya Seç"
 $btnPick.Location = New-Object System.Drawing.Point(16, 74)
 $btnPick.Size = New-Object System.Drawing.Size(132, 38)
 $btnPick.FlatStyle = "Flat"
 $btnPick.FlatAppearance.BorderSize = 0
-$btnPick.Font = New-Object System.Drawing.Font("Segoe UI Semibold", 9, [System.Drawing.FontStyle]::Bold)
+$btnPick.Font = $fontButton
 $btnPick.Cursor = "Hand"
 $form.Controls.Add($btnPick)
 
 $lblPath = New-Object System.Windows.Forms.Label
-$lblPath.Text = "Henüz görsel seçilmedi"
-$lblPath.Location = New-Object System.Drawing.Point(160, 84)
-$lblPath.Size = New-Object System.Drawing.Size(600, 20)
+$lblPath.Text = "Henüz bir dosya seçilmedi"
+$lblPath.Location = New-Object System.Drawing.Point(164, 85)
+$lblPath.Size = New-Object System.Drawing.Size(600, 18)
+$lblPath.Font = $fontSmall
 $lblPath.AutoEllipsis = $true
 $form.Controls.Add($lblPath)
 
@@ -350,7 +402,7 @@ $lblNoImg.Text = "Önizleme"
 $lblNoImg.Location = New-Object System.Drawing.Point(10, 10)
 $lblNoImg.Size = New-Object System.Drawing.Size(352, 346)
 $lblNoImg.TextAlign = "MiddleCenter"
-$lblNoImg.Font = New-Object System.Drawing.Font("Segoe UI", 10)
+$lblNoImg.Font = $fontPreview
 $cardLeft.Controls.Add($lblNoImg)
 $lblNoImg.BringToFront()
 
@@ -359,7 +411,7 @@ $lblTone = New-Object System.Windows.Forms.Label
 $lblTone.Text = "SES TONU"
 $lblTone.Location = New-Object System.Drawing.Point(14, 12)
 $lblTone.Size = New-Object System.Drawing.Size(200, 16)
-$lblTone.Font = New-Object System.Drawing.Font("Segoe UI", 7.5)
+$lblTone.Font = $fontLabel
 $cardRight.Controls.Add($lblTone)
 
 $cmbTone = New-Object System.Windows.Forms.ComboBox
@@ -376,7 +428,7 @@ $lblLevel = New-Object System.Windows.Forms.Label
 $lblLevel.Text = "ANLATIM UZUNLUĞU"
 $lblLevel.Location = New-Object System.Drawing.Point(14, 58)
 $lblLevel.Size = New-Object System.Drawing.Size(200, 16)
-$lblLevel.Font = New-Object System.Drawing.Font("Segoe UI", 7.5)
+$lblLevel.Font = $fontLabel
 $cardRight.Controls.Add($lblLevel)
 
 $cmbLevel = New-Object System.Windows.Forms.ComboBox
@@ -395,7 +447,7 @@ $lblDur = New-Object System.Windows.Forms.Label
 $lblDur.Text = "KONUŞMA SÜRESİ"
 $lblDur.Location = New-Object System.Drawing.Point(14, 106)
 $lblDur.Size = New-Object System.Drawing.Size(200, 16)
-$lblDur.Font = New-Object System.Drawing.Font("Segoe UI", 7.5)
+$lblDur.Font = $fontLabel
 $cardRight.Controls.Add($lblDur)
 
 $numDur = New-Object System.Windows.Forms.NumericUpDown
@@ -417,14 +469,14 @@ $lblDurHint = New-Object System.Windows.Forms.Label
 $lblDurHint.Text = "1-50 sn. Model bu süreye yakın konuşur."
 $lblDurHint.Location = New-Object System.Drawing.Point(146, 128)
 $lblDurHint.Size = New-Object System.Drawing.Size(216, 20)
-$lblDurHint.Font = New-Object System.Drawing.Font("Segoe UI", 7.5)
+$lblDurHint.Font = $fontSmall
 $cardRight.Controls.Add($lblDurHint)
 
 $chkNatural = New-Object System.Windows.Forms.CheckBox
 $chkNatural.Text = "Doğal hızda bırak (süre ayarı kapalı)"
 $chkNatural.Location = New-Object System.Drawing.Point(14, 150)
 $chkNatural.Size = New-Object System.Drawing.Size(300, 18)
-$chkNatural.Font = New-Object System.Drawing.Font("Segoe UI", 7.5)
+$chkNatural.Font = $fontSmall
 $cardRight.Controls.Add($chkNatural)
 
 # --- Soru ---
@@ -432,7 +484,7 @@ $lblQ = New-Object System.Windows.Forms.Label
 $lblQ.Text = "SORU / YÖNERGE"
 $lblQ.Location = New-Object System.Drawing.Point(14, 176)
 $lblQ.Size = New-Object System.Drawing.Size(240, 16)
-$lblQ.Font = New-Object System.Drawing.Font("Segoe UI", 7.5)
+$lblQ.Font = $fontLabel
 $cardRight.Controls.Add($lblQ)
 
 $txtQ = New-Object System.Windows.Forms.TextBox
@@ -449,7 +501,7 @@ $chkResearch = New-Object System.Windows.Forms.CheckBox
 $chkResearch.Text = "Emin olmadığı / güncel konuları internette araştır"
 $chkResearch.Location = New-Object System.Drawing.Point(14, 248)
 $chkResearch.Size = New-Object System.Drawing.Size(348, 20)
-$chkResearch.Font = New-Object System.Drawing.Font("Segoe UI", 7.5)
+$chkResearch.Font = $fontSmall
 $cardRight.Controls.Add($chkResearch)
 
 $btnAnalyze = New-Object System.Windows.Forms.Button
@@ -458,7 +510,7 @@ $btnAnalyze.Location = New-Object System.Drawing.Point(14, 276)
 $btnAnalyze.Size = New-Object System.Drawing.Size(348, 40)
 $btnAnalyze.FlatStyle = "Flat"
 $btnAnalyze.FlatAppearance.BorderSize = 0
-$btnAnalyze.Font = New-Object System.Drawing.Font("Segoe UI Semibold", 9.5, [System.Drawing.FontStyle]::Bold)
+$btnAnalyze.Font = $fontButton
 $btnAnalyze.Cursor = "Hand"
 $btnAnalyze.Enabled = $false
 $cardRight.Controls.Add($btnAnalyze)
@@ -469,7 +521,7 @@ $btnReplay.Location = New-Object System.Drawing.Point(14, 324)
 $btnReplay.Size = New-Object System.Drawing.Size(186, 30)
 $btnReplay.FlatStyle = "Flat"
 $btnReplay.FlatAppearance.BorderSize = 0
-$btnReplay.Font = New-Object System.Drawing.Font("Segoe UI", 8.5)
+$btnReplay.Font = $fontBody
 $btnReplay.Cursor = "Hand"
 $btnReplay.Enabled = $false
 $cardRight.Controls.Add($btnReplay)
@@ -480,7 +532,7 @@ $btnStop.Location = New-Object System.Drawing.Point(208, 324)
 $btnStop.Size = New-Object System.Drawing.Size(74, 30)
 $btnStop.FlatStyle = "Flat"
 $btnStop.FlatAppearance.BorderSize = 0
-$btnStop.Font = New-Object System.Drawing.Font("Segoe UI", 8.5)
+$btnStop.Font = $fontBody
 $btnStop.Cursor = "Hand"
 $btnStop.Enabled = $false
 $cardRight.Controls.Add($btnStop)
@@ -491,7 +543,7 @@ $btnFolder.Location = New-Object System.Drawing.Point(290, 324)
 $btnFolder.Size = New-Object System.Drawing.Size(72, 30)
 $btnFolder.FlatStyle = "Flat"
 $btnFolder.FlatAppearance.BorderSize = 0
-$btnFolder.Font = New-Object System.Drawing.Font("Segoe UI", 8.5)
+$btnFolder.Font = $fontBody
 $btnFolder.Cursor = "Hand"
 $cardRight.Controls.Add($btnFolder)
 
@@ -500,7 +552,7 @@ $lblStyle = New-Object System.Windows.Forms.Label
 $lblStyle.Text = "ANLATIM TARZIM  —  nasıl konuşayım, neyi önemseyeyim? (bir kez yazın, kaydedilir)"
 $lblStyle.Location = New-Object System.Drawing.Point(18, 502)
 $lblStyle.Size = New-Object System.Drawing.Size(760, 16)
-$lblStyle.Font = New-Object System.Drawing.Font("Segoe UI", 7.5)
+$lblStyle.Font = $fontLabel
 $form.Controls.Add($lblStyle)
 
 $txtStyle = New-Object System.Windows.Forms.TextBox
@@ -516,7 +568,7 @@ $lblOut = New-Object System.Windows.Forms.Label
 $lblOut.Text = "ANLATIM METNİ"
 $lblOut.Location = New-Object System.Drawing.Point(18, 588)
 $lblOut.Size = New-Object System.Drawing.Size(240, 16)
-$lblOut.Font = New-Object System.Drawing.Font("Segoe UI", 7.5)
+$lblOut.Font = $fontLabel
 $form.Controls.Add($lblOut)
 
 $txtOut = New-Object System.Windows.Forms.TextBox
@@ -532,7 +584,7 @@ $lblStatus = New-Object System.Windows.Forms.Label
 $lblStatus.Text = "Hazır. Bir görsel, ses, video veya metin dosyası seçerek başlayın."
 $lblStatus.Location = New-Object System.Drawing.Point(50, 712)
 $lblStatus.Size = New-Object System.Drawing.Size(724, 22)
-$lblStatus.Font = New-Object System.Drawing.Font("Segoe UI", 8.5, [System.Drawing.FontStyle]::Italic)
+$lblStatus.Font = $fontStatus
 $form.Controls.Add($lblStatus)
 
 # --- Loader (donen halka + animasyonlu noktalar) ---
@@ -590,8 +642,15 @@ $lblHint = New-Object System.Windows.Forms.Label
 $lblHint.Text = "İpucu: Görsel, ses, video (ffmpeg gerekir) veya metin yükleyebilirsiniz. 'Anlatım Uzunluğu' ile kısa/normal/detaylı seçin; emin olunmayan veya güncel bilgi için 'internette araştır' işaretleyin. 'Anlatım Tarzım' kutusu kalıcıdır."
 $lblHint.Location = New-Object System.Drawing.Point(18, 750)
 $lblHint.Size = New-Object System.Drawing.Size(756, 36)
-$lblHint.Font = New-Object System.Drawing.Font("Segoe UI", 7.5)
+$lblHint.Font = $fontSmall
 $form.Controls.Add($lblHint)
+
+# ---------------------------------------------------------------------------
+# Yazi tiplerini kontrol gruplarina uygula
+# ---------------------------------------------------------------------------
+foreach ($c in @($cmbTone, $cmbLevel, $numDur, $txtQ, $txtOut, $txtStyle)) {
+    $c.Font = $fontBody
+}
 
 # ---------------------------------------------------------------------------
 # TEMA UYGULAMA
@@ -605,7 +664,8 @@ function Apply-Theme([bool]$Dark) {
     $accentLine.BackColor  = $p.Accent
     $spinner.BackColor     = $p.Bg
     $lblTitle.ForeColor    = $p.Text
-    $lblSub.ForeColor      = $p.Accent
+    $lblBrand.ForeColor    = $p.Accent
+    $lblSub.ForeColor      = $p.Muted
 
     foreach ($b in @($btnTheme, $btnMin)) {
         $b.BackColor = $p.Header
