@@ -125,6 +125,8 @@ insan sesi (kadın/erkek) değil**. Gerçek farklı konuşmacılar isterseniz ik
 | `.\run-image.cmd <resim> "<soru>"` | Sadece metin cevabı (ses yok) |
 | `.\run-audio.cmd <ses> "<soru>"` | Ses dosyasını yazıya çevirir |
 | `.\run-server.cmd` | Tarayıcı arayüzü: http://127.0.0.1:8080 |
+| `.\masaustu-kisayol.ps1` | Masaüstüne simgeli Omni3B kısayolu ekler |
+| `.\assets\simge-olustur.ps1` | Uygulama simgesini yeniden üretir |
 
 Özel kullanım:
 
@@ -186,6 +188,8 @@ omni3b\
 ├── gui.ps1           arayüz (WinForms)
 ├── describe.ps1      komut satırı hattı (ton destekli)
 ├── cekirdek.ps1      ortak çekirdek (medya türü, prompt, model, araştırma)
+├── masaustu-kisayol.ps1  masaüstüne simgeli kısayol ekler
+├── assets\           omni3b.ico (uygulama simgesi) + simge-olustur.ps1
 ├── benim-tarzim.ornek.txt  tarz dosyası örneği
 ├── benim-tarzim.txt  kişisel tarzınız (arayüz oluşturur)
 ├── anlat.cmd         çift tık → arayüz / argümanlı → CLI

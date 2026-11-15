@@ -288,13 +288,19 @@ $script:dark = $true
 $P = New-Palette $true
 
 $form = New-Object System.Windows.Forms.Form
-$form.Text = "Omni3B - Gorsel Anlatici"
+$form.Text = "Omni3B — Görselden Türkçe Sesli Anlatım"
 $form.Size = New-Object System.Drawing.Size(792, 820)
 $form.StartPosition = "CenterScreen"
 $form.FormBorderStyle = "None"
 $form.MaximizeBox = $false
 $form.Font = $fontBody
 $form.BackColor = $P.Bg
+
+# Uygulama simgesi (gorev cubugu / Alt+Tab / pencere simgesi)
+$iconPath = Join-Path $root "assets\omni3b.ico"
+if (Test-Path $iconPath) {
+    try { $form.Icon = New-Object System.Drawing.Icon($iconPath) } catch { }
+}
 
 # --- Ozel baslik cubugu ---
 $header = New-Object System.Windows.Forms.Panel

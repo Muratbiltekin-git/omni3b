@@ -1,7 +1,10 @@
+<img src="assets/simge.png" width="64" align="right" alt="Omni3B simgesi" />
+
 # Omni3B — Görselden Türkçe Sesli Anlatım
 
-Yerel, çevrimdışı bir **görsel → metin → ses** aracı. Bir fotoğraf seçersiniz, model
-fotoğrafı Türkçe anlatır ve seçtiğiniz ton ile konuşma süresinde sesli olarak okur.
+Yerel, çevrimdışı bir **içerik → metin → ses** aracı. Bir fotoğraf, ses kaydı, video veya
+metin dosyası seçersiniz; model içeriği Türkçe anlatır ve seçtiğiniz ton ile konuşma
+süresinde sesli olarak okur.
 
 Tamamı kendi bilgisayarınızda çalışır: **internet gerekmez**, hiçbir veri dışarı gitmez.
 4 GB VRAM'li (GTX 1650 gibi) mütevazı ekran kartlarında çalışacak şekilde ayarlanmıştır.
@@ -20,6 +23,8 @@ Görsel  ──▶  Qwen2.5-Omni-3B (GGUF / llama.cpp)  ──▶  Türkçe meti
 ## Özellikler
 
 - **Çift tıklanabilir arayüz** — `anlat.cmd`'ye çift tıklayın, WinForms arayüzü açılır.
+- **Özel uygulama simgesi** — `assets\omni3b.ico`; görev çubuğunda, Alt+Tab'da ve masaüstü
+  kısayolunda görünür.
 - **Çok türlü girdi** — görsel, **ses**, **video** (ffmpeg gerekir) ve **metin** dosyaları.
 - **8 konuşma tonu** — sakin, hızlı, dramatik, çocuk sesi vb.
 - **Anlatım uzunluğu** — kısa (tek cümle), normal (≤2 cümle), detaylı (4–6 cümle).
@@ -115,6 +120,21 @@ sonraki açılışta geri gelir. Model, görseli sizin ağzınızdan anlatır.
 
 Tek seferlik bir yönerge için alttaki **SORU / YÖNERGE** kutusunu kullanın; ikisi birlikte
 modele verilir. Tarz kutusunu boş bırakırsanız tarz dosyası silinir ve sade anlatım kullanılır.
+
+### Masaüstü kısayolu ve simge
+
+`.\masaustu-kisayol.ps1` çalıştırın: masaüstüne **Omni3B** adında simgeli bir kısayol eklenir.
+Kısayol `anlat.cmd`'yi açar; simge `assets\omni3b.ico` dosyasından gelir.
+
+Simgeyi yeniden üretmek (veya rengini değiştirmek) için:
+
+```powershell
+.\assets\simge-olustur.ps1     # assets\omni3b.ico + assets\simge.png yeniden çizilir
+```
+
+> `.cmd` dosyalarının kendi simgesi Windows tarafından sabittir; bu yüzden simgeyi görmek için
+> masaüstü kısayolunu kullanın. Arayüz penceresi ve görev çubuğu simgesi ayrıca `gui.ps1`
+> tarafından otomatik ayarlanır.
 
 ### Komut satırı ile de çalıştırabilirsin
 
