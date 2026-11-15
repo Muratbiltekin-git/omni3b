@@ -6,6 +6,11 @@
 #   .\describe.ps1 -Image "foto.jpg" -Tone enerjik -Repeat 2
 #   .\describe.ps1 -Image "foto.jpg" -Tone dramatik -Question "Bu manzara neresi?"
 #   .\describe.ps1 -Image "foto.jpg" -Style "Kisa ve esprili konusurum, renkleri onemserim."
+#   .\describe.ps1 -Image "foto.jpg" -Level detayli
+#   .\describe.ps1 -Image "foto.jpg" -Research
+#   .\describe.ps1 -Image "video.mp4"      (ffmpeg gerekir)
+#   .\describe.ps1 -Image "kayit.mp3"
+#   .\describe.ps1 -Image "notlar.txt"
 #   .\describe.ps1 -ListTones
 #
 # Kisisel tarz: proje klasorundeki "benim-tarzim.txt" dosyasi varsa otomatik
@@ -16,6 +21,9 @@ param(
     [string]$Question = "Bu görselde ne var? En fazla iki cümleyle, doğal konuşma dilinde Türkçe anlat.",
     [string]$Style,
     [switch]$NoStyle,
+    [ValidateSet("kisa", "normal", "detayli")]
+    [string]$Level = "normal",
+    [switch]$Research,
     [ValidateSet("normal", "sakin", "hizli", "enerjik", "yavas", "dramatik", "sunucu", "cocuk")]
     [string]$Tone = "normal",
     [switch]$NoPlay,
@@ -59,6 +67,8 @@ if ($ListTones) {
 if ([string]::IsNullOrWhiteSpace($Image)) { throw "Resim belirtilmedi. -Image parametresini kullanin veya -ListTones yazin." }
 
 $root   = Split-Path -Parent $MyInvocation.MyCommand.Path
+. (Join-Path $root "cekirdek.ps1")
+
 $model  = Join-Path $root "models\Qwen2.5-Omni-3B-Q4_K_M.gguf"
 $mmproj = Join-Path $root "models\mmproj-Qwen2.5-Omni-3B-Q8_0.gguf"
 $llama  = Join-Path $root "llama\llama-mtmd-cli.exe"
@@ -79,17 +89,12 @@ if (-not $NoStyle) {
     }
 }
 
-$rules = "Kurallar: en fazla iki cümle, doğal konuşma dili, Türkçe. 'Görselde', 'resimde', 'fotoğrafta' diye başlama."
-$promptParts = @("Sen kullanıcının ağzından konuşuyorsun.")
-if ($styleText) { $promptParts += "Kullanıcının anlatım tarzı: $styleText" }
-$promptParts += "Görev: $Question"
-$promptParts += $rules
-$promptText = ($promptParts -join " ")
+$promptText = ""
 
 foreach ($f in @($llama, $model, $mmproj, $piper, $voice)) {
     if (-not (Test-Path $f)) { throw "Eksik dosya: $f" }
 }
-if (-not (Test-Path $Image)) { throw "Resim bulunamadi: $Image" }
+if (-not (Test-Path $Image)) { throw "Dosya bulunamadi: $Image" }
 $Image = (Resolve-Path $Image).Path
 
 # WAV basligindaki ornekleme hizini degistirir -> perde kaydirma.
@@ -124,51 +129,64 @@ function Set-WavPitch([string]$Path, [double]$Factor) {
 $inv = [System.Globalization.CultureInfo]::InvariantCulture
 $t = $Tones[$Tone]
 
-# ---------- 1) Gorsel -> metin ----------
-Write-Host "[1/4] Gorsel analiz ediliyor..." -ForegroundColor Cyan
+# ---------- 1) Medya -> metin ----------
+$kind = Get-MediaKind $Image
+if ($kind -eq "unknown") { throw "Desteklenmeyen dosya turu: $Image (gorsel, ses, video veya metin olmali)" }
+
+$profile = Get-LevelProfile $Level
+$context = 2048
+if ($Level -eq "detayli" -or $Research) { $context = 3072 }
+
+Write-Host "[1/4] Icerik analiz ediliyor ($kind)..." -ForegroundColor Cyan
 if ($styleText) { Write-Host "      Tarz: $styleText" -ForegroundColor DarkGray }
+Write-Host "      Uzunluk: $($profile.Name)" -ForegroundColor DarkGray
 
-$tmpDir = Join-Path $env:TEMP ("omni3b-" + [guid]::NewGuid().ToString("N"))
-New-Item -ItemType Directory -Force -Path $tmpDir | Out-Null
-$promptFile = Join-Path $tmpDir "prompt.txt"
-$outFile    = Join-Path $tmpDir "out.txt"
-$errFile    = Join-Path $tmpDir "err.txt"
+$frameDir = $null
+$framePaths = @()
+$mediaPath = $Image
+$extraText = ""
 
-# Turkce karakterler komut satirinda bozulmasin diye prompt dosyadan veriliyor
-[System.IO.File]::WriteAllText($promptFile, $promptText, (New-Object System.Text.UTF8Encoding($false)))
-
-$args1 = @(
-    "-m", "`"$model`"", "--mmproj", "`"$mmproj`"",
-    "-ngl", "99", "-fit", "off", "-c", "2048",
-    "--image", "`"$Image`"",
-    "--temp", "0", "--repeat-penalty", "1.1", "--repeat-last-n", "128",
-    "-n", "200", "-f", "`"$promptFile`""
-) -join " "
-
-$p = Start-Process -FilePath $llama -ArgumentList $args1 -NoNewWindow -Wait -PassThru `
-        -RedirectStandardOutput $outFile -RedirectStandardError $errFile
-
-$text = (Get-Content $outFile -Encoding UTF8 -Raw)
-Remove-Item $tmpDir -Recurse -Force -ErrorAction SilentlyContinue
-
-$text = ($text -replace '\s+', ' ').Trim()
-if ([string]::IsNullOrWhiteSpace($text)) {
-    throw "Model bos yanit dondurdu. (llama cikis kodu: $($p.ExitCode))"
+switch ($kind) {
+    "video" {
+        $vf = Get-VideoFrames -Path $Image -Count 4
+        $frameDir = $vf.Dir
+        if (-not $vf.Ok) { throw $vf.Error }
+        $framePaths = $vf.Frames
+        Write-Host "      $($framePaths.Count) kare cikarildi." -ForegroundColor DarkGray
+    }
+    "text" {
+        $extraText = Get-TextPreview -Path $Image
+        if ([string]::IsNullOrWhiteSpace($extraText)) { throw "Metin dosyasi okunamadi veya bos: $Image" }
+        $mediaPath = $null
+    }
 }
 
-# Tekrar dongusu korumasi: ayni 8 kelimelik parca 3 kez gecerse kes
-$words = $text -split ' '
-if ($words.Count -ge 24) {
-    for ($i = 0; $i -le $words.Count - 24; $i++) {
-        $chunk = ($words[$i..($i + 7)] -join ' ')
-        if ($chunk.Trim().Length -lt 8) { continue }
-        $hits = ([regex]::Matches($text, [regex]::Escape($chunk))).Count
-        if ($hits -ge 3) {
-            $text = $text.Substring(0, $text.IndexOf($chunk, [StringComparison]::Ordinal)).TrimEnd(' ', ',', '-', ':')
-            if (-not $text.EndsWith('.')) { $text += '.' }
-            break
-        }
+# ---------- 1b) Internet arastirmasi (istege bagli) ----------
+$researchText = ""
+$researchSources = @()
+if ($Research) {
+    Write-Host "[1b/4] Internet arastirmasi: $Question" -ForegroundColor Cyan
+    $wr = Get-WebResearch -Query $Question
+    if ($wr.Ok) {
+        $researchText = $wr.Text
+        $researchSources = $wr.Sources
+        Write-Host "      Kaynak: $($researchSources -join ', ')" -ForegroundColor DarkGray
+    } else {
+        Write-Host "      Arastirma yapilamadi: $($wr.Error)" -ForegroundColor Yellow
     }
+}
+
+$promptText = New-OmniPrompt -Question $Question -Style $styleText -Level $Level `
+                -ResearchText $researchText -Sources $researchSources `
+                -MediaKind $kind -ExtraText $extraText
+
+try {
+    $text = Invoke-OmniModel -Prompt $promptText `
+                -LlamaPath $llama -ModelPath $model -MmprojPath $mmproj `
+                -MediaPath $mediaPath -MediaKind $kind -FramePaths $framePaths `
+                -MaxTokens $profile.Tokens -Context $context
+} finally {
+    if ($frameDir) { Remove-Item $frameDir -Recurse -Force -ErrorAction SilentlyContinue }
 }
 
 Write-Host "[2/4] Metin: $text" -ForegroundColor Green

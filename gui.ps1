@@ -15,6 +15,8 @@ Add-Type -AssemblyName System.Drawing
 [System.Windows.Forms.Application]::EnableVisualStyles()
 
 $root   = Split-Path -Parent $MyInvocation.MyCommand.Path
+. (Join-Path $root "cekirdek.ps1")
+
 $model  = Join-Path $root "models\Qwen2.5-Omni-3B-Q4_K_M.gguf"
 $mmproj = Join-Path $root "models\mmproj-Qwen2.5-Omni-3B-Q8_0.gguf"
 $llama  = Join-Path $root "llama\llama-mtmd-cli.exe"
@@ -120,56 +122,66 @@ function Get-WavSeconds([string]$Path) {
     return [math]::Round($dataSize / $byteRate, 2)
 }
 
-function Get-Description([string]$ImagePath, [string]$Question, [string]$Style) {
-    $tmp = Join-Path $env:TEMP ("omni3b-gui-" + [guid]::NewGuid().ToString("N"))
-    New-Item -ItemType Directory -Force -Path $tmp | Out-Null
-    $promptFile = Join-Path $tmp "p.txt"
-    $outFile    = Join-Path $tmp "o.txt"
-    $errFile    = Join-Path $tmp "e.txt"
+# Medyayi modele verir ve anlatim metnini dondurur.
+#   Donus: @{ Text = "..."; Sources = @() }
+function Get-ContentSummary {
+    param(
+        [Parameter(Mandatory)][string]$MediaPath,
+        [Parameter(Mandatory)][string]$MediaKind,
+        [string]$Question,
+        [string]$Style,
+        [string]$Level = "normal",
+        [bool]$Research = $false
+    )
 
-    # Kullanicinin agzindan anlatan prompt
-    $rules = "Kurallar: en fazla iki cümle, doğal konuşma dili, Türkçe. 'Görselde', 'resimde', 'fotoğrafta' diye başlama."
-    $parts = @("Sen kullanıcının ağzından konuşuyorsun.")
-    if (-not [string]::IsNullOrWhiteSpace($Style)) {
-        $parts += "Kullanıcının anlatım tarzı: " + ($Style -replace '\s+', ' ').Trim()
-    }
-    $parts += "Görev: $Question"
-    $parts += $rules
-    $promptText = ($parts -join " ")
+    $profile = Get-LevelProfile $Level
+    $context = 2048
+    if ($Level -eq "detayli" -or $Research) { $context = 3072 }
 
-    [System.IO.File]::WriteAllText($promptFile, $promptText, (New-Object System.Text.UTF8Encoding($false)))
+    $frameDir = $null
+    $framePaths = @()
+    $mediaArg = $MediaPath
+    $extraText = ""
 
-    $a = @(
-        "-m", "`"$model`"", "--mmproj", "`"$mmproj`"",
-        "-ngl", "99", "-fit", "off", "-c", "2048",
-        "--image", "`"$ImagePath`"",
-        "--temp", "0", "--repeat-penalty", "1.1", "--repeat-last-n", "128",
-        "-n", "200", "-f", "`"$promptFile`""
-    ) -join " "
-
-    $p = Start-Process -FilePath $llama -ArgumentList $a -NoNewWindow -Wait -PassThru `
-            -RedirectStandardOutput $outFile -RedirectStandardError $errFile
-
-    $txt = (Get-Content $outFile -Encoding UTF8 -Raw)
-    Remove-Item $tmp -Recurse -Force -ErrorAction SilentlyContinue
-
-    $txt = ($txt -replace '\s+', ' ').Trim()
-    if ([string]::IsNullOrWhiteSpace($txt)) { throw "Model bos yanit dondurdu (cikis kodu $($p.ExitCode))." }
-
-    $w = $txt -split ' '
-    if ($w.Count -ge 24) {
-        for ($i = 0; $i -le $w.Count - 24; $i++) {
-            $chunk = ($w[$i..($i + 7)] -join ' ')
-            if ($chunk.Trim().Length -lt 8) { continue }
-            $hits = ([regex]::Matches($txt, [regex]::Escape($chunk))).Count
-            if ($hits -ge 3) {
-                $txt = $txt.Substring(0, $txt.IndexOf($chunk, [StringComparison]::Ordinal)).TrimEnd(' ', ',', '-', ':')
-                if (-not $txt.EndsWith('.')) { $txt += '.' }
-                break
-            }
+    switch ($MediaKind) {
+        "video" {
+            $vf = Get-VideoFrames -Path $MediaPath -Count 4
+            $frameDir = $vf.Dir
+            if (-not $vf.Ok) { throw $vf.Error }
+            $framePaths = $vf.Frames
+            $mediaArg = $null
+        }
+        "text" {
+            $extraText = Get-TextPreview -Path $MediaPath
+            if ([string]::IsNullOrWhiteSpace($extraText)) { throw "Metin dosyasi okunamadi veya bos." }
+            $mediaArg = $null
         }
     }
-    return $txt
+
+    $researchText = ""
+    $sources = @()
+    if ($Research) {
+        $wr = Get-WebResearch -Query $Question
+        if ($wr.Ok) {
+            $researchText = $wr.Text
+            $sources = $wr.Sources
+        }
+    }
+
+    $prompt = New-OmniPrompt -Question $Question -Style $Style -Level $Level `
+                -ResearchText $researchText -Sources $sources `
+                -MediaKind $MediaKind -ExtraText $extraText
+
+    try {
+        $text = Invoke-OmniModel -Prompt $prompt `
+                    -LlamaPath $llama -ModelPath $model -MmprojPath $mmproj `
+                    -MediaPath $mediaArg -MediaKind $MediaKind -FramePaths $framePaths `
+                    -MaxTokens $profile.Tokens -Context $context
+    } finally {
+        if ($frameDir) { Remove-Item $frameDir -Recurse -Force -ErrorAction SilentlyContinue }
+    }
+
+    return [pscustomobject]@{ Text = $text; Sources = $sources }
 }
 
 # Hedef sureye gore konusma hizini ayarlayarak ses uretir.
@@ -233,7 +245,7 @@ $P = New-Palette $true
 
 $form = New-Object System.Windows.Forms.Form
 $form.Text = "Omni3B - Gorsel Anlatici"
-$form.Size = New-Object System.Drawing.Size(792, 816)
+$form.Size = New-Object System.Drawing.Size(792, 820)
 $form.StartPosition = "CenterScreen"
 $form.FormBorderStyle = "None"
 $form.MaximizeBox = $false
@@ -318,17 +330,17 @@ $form.Controls.Add($lblPath)
 # --- Kartlar ---
 $cardLeft = New-Object System.Windows.Forms.Panel
 $cardLeft.Location = New-Object System.Drawing.Point(16, 124)
-$cardLeft.Size = New-Object System.Drawing.Size(372, 340)
+$cardLeft.Size = New-Object System.Drawing.Size(372, 366)
 $form.Controls.Add($cardLeft)
 
 $cardRight = New-Object System.Windows.Forms.Panel
 $cardRight.Location = New-Object System.Drawing.Point(400, 124)
-$cardRight.Size = New-Object System.Drawing.Size(376, 340)
+$cardRight.Size = New-Object System.Drawing.Size(376, 366)
 $form.Controls.Add($cardRight)
 
 $pic = New-Object System.Windows.Forms.PictureBox
 $pic.Location = New-Object System.Drawing.Point(10, 10)
-$pic.Size = New-Object System.Drawing.Size(352, 320)
+$pic.Size = New-Object System.Drawing.Size(352, 346)
 $pic.SizeMode = "Zoom"
 $pic.BackColor = $P.SurfaceHi
 $cardLeft.Controls.Add($pic)
@@ -336,7 +348,7 @@ $cardLeft.Controls.Add($pic)
 $lblNoImg = New-Object System.Windows.Forms.Label
 $lblNoImg.Text = "Önizleme"
 $lblNoImg.Location = New-Object System.Drawing.Point(10, 10)
-$lblNoImg.Size = New-Object System.Drawing.Size(352, 320)
+$lblNoImg.Size = New-Object System.Drawing.Size(352, 346)
 $lblNoImg.TextAlign = "MiddleCenter"
 $lblNoImg.Font = New-Object System.Drawing.Font("Segoe UI", 10)
 $cardLeft.Controls.Add($lblNoImg)
@@ -359,16 +371,35 @@ foreach ($k in $ToneOrder) { [void]$cmbTone.Items.Add("$k  -  $($Tones[$k].Acikl
 $cmbTone.SelectedIndex = 0
 $cardRight.Controls.Add($cmbTone)
 
+# --- Anlatim uzunlugu ---
+$lblLevel = New-Object System.Windows.Forms.Label
+$lblLevel.Text = "ANLATIM UZUNLUĞU"
+$lblLevel.Location = New-Object System.Drawing.Point(14, 58)
+$lblLevel.Size = New-Object System.Drawing.Size(200, 16)
+$lblLevel.Font = New-Object System.Drawing.Font("Segoe UI", 7.5)
+$cardRight.Controls.Add($lblLevel)
+
+$cmbLevel = New-Object System.Windows.Forms.ComboBox
+$cmbLevel.Location = New-Object System.Drawing.Point(14, 76)
+$cmbLevel.Size = New-Object System.Drawing.Size(348, 24)
+$cmbLevel.DropDownStyle = "DropDownList"
+$cmbLevel.FlatStyle = "Flat"
+[void]$cmbLevel.Items.Add("kisa    -  tek cümle")
+[void]$cmbLevel.Items.Add("normal  -  en fazla iki cümle")
+[void]$cmbLevel.Items.Add("detayli -  4-6 cümle, ayrıntılı")
+$cmbLevel.SelectedIndex = 1
+$cardRight.Controls.Add($cmbLevel)
+
 # --- Sure ---
 $lblDur = New-Object System.Windows.Forms.Label
 $lblDur.Text = "KONUŞMA SÜRESİ"
-$lblDur.Location = New-Object System.Drawing.Point(14, 66)
+$lblDur.Location = New-Object System.Drawing.Point(14, 106)
 $lblDur.Size = New-Object System.Drawing.Size(200, 16)
 $lblDur.Font = New-Object System.Drawing.Font("Segoe UI", 7.5)
 $cardRight.Controls.Add($lblDur)
 
 $numDur = New-Object System.Windows.Forms.NumericUpDown
-$numDur.Location = New-Object System.Drawing.Point(14, 84)
+$numDur.Location = New-Object System.Drawing.Point(14, 124)
 $numDur.Size = New-Object System.Drawing.Size(78, 26)
 $numDur.Minimum = 1
 $numDur.Maximum = 50
@@ -378,45 +409,53 @@ $cardRight.Controls.Add($numDur)
 
 $lblDurUnit = New-Object System.Windows.Forms.Label
 $lblDurUnit.Text = "saniye"
-$lblDurUnit.Location = New-Object System.Drawing.Point(98, 88)
+$lblDurUnit.Location = New-Object System.Drawing.Point(98, 128)
 $lblDurUnit.Size = New-Object System.Drawing.Size(46, 20)
 $cardRight.Controls.Add($lblDurUnit)
 
 $lblDurHint = New-Object System.Windows.Forms.Label
 $lblDurHint.Text = "1-50 sn. Model bu süreye yakın konuşur."
-$lblDurHint.Location = New-Object System.Drawing.Point(146, 88)
+$lblDurHint.Location = New-Object System.Drawing.Point(146, 128)
 $lblDurHint.Size = New-Object System.Drawing.Size(216, 20)
 $lblDurHint.Font = New-Object System.Drawing.Font("Segoe UI", 7.5)
 $cardRight.Controls.Add($lblDurHint)
 
 $chkNatural = New-Object System.Windows.Forms.CheckBox
 $chkNatural.Text = "Doğal hızda bırak (süre ayarı kapalı)"
-$chkNatural.Location = New-Object System.Drawing.Point(14, 114)
-$chkNatural.Size = New-Object System.Drawing.Size(300, 20)
+$chkNatural.Location = New-Object System.Drawing.Point(14, 150)
+$chkNatural.Size = New-Object System.Drawing.Size(300, 18)
 $chkNatural.Font = New-Object System.Drawing.Font("Segoe UI", 7.5)
 $cardRight.Controls.Add($chkNatural)
 
 # --- Soru ---
 $lblQ = New-Object System.Windows.Forms.Label
 $lblQ.Text = "SORU / YÖNERGE"
-$lblQ.Location = New-Object System.Drawing.Point(14, 142)
+$lblQ.Location = New-Object System.Drawing.Point(14, 176)
 $lblQ.Size = New-Object System.Drawing.Size(240, 16)
 $lblQ.Font = New-Object System.Drawing.Font("Segoe UI", 7.5)
 $cardRight.Controls.Add($lblQ)
 
 $txtQ = New-Object System.Windows.Forms.TextBox
-$txtQ.Location = New-Object System.Drawing.Point(14, 160)
-$txtQ.Size = New-Object System.Drawing.Size(348, 62)
+$txtQ.Location = New-Object System.Drawing.Point(14, 194)
+$txtQ.Size = New-Object System.Drawing.Size(348, 48)
 $txtQ.Multiline = $true
 $txtQ.ScrollBars = "Vertical"
 $txtQ.BorderStyle = "FixedSingle"
-$txtQ.Text = "Bu görselde ne var? En fazla iki cümleyle, doğal konuşma dilinde Türkçe anlat."
+$txtQ.Text = "Bu görselde ne var? Kısa ve doğal Türkçeyle anlat."
 $cardRight.Controls.Add($txtQ)
+
+# --- Internet arastirmasi ---
+$chkResearch = New-Object System.Windows.Forms.CheckBox
+$chkResearch.Text = "Emin olmadığı / güncel konuları internette araştır"
+$chkResearch.Location = New-Object System.Drawing.Point(14, 248)
+$chkResearch.Size = New-Object System.Drawing.Size(348, 20)
+$chkResearch.Font = New-Object System.Drawing.Font("Segoe UI", 7.5)
+$cardRight.Controls.Add($chkResearch)
 
 $btnAnalyze = New-Object System.Windows.Forms.Button
 $btnAnalyze.Text = "ANLAT VE DİNLE"
-$btnAnalyze.Location = New-Object System.Drawing.Point(14, 232)
-$btnAnalyze.Size = New-Object System.Drawing.Size(348, 44)
+$btnAnalyze.Location = New-Object System.Drawing.Point(14, 276)
+$btnAnalyze.Size = New-Object System.Drawing.Size(348, 40)
 $btnAnalyze.FlatStyle = "Flat"
 $btnAnalyze.FlatAppearance.BorderSize = 0
 $btnAnalyze.Font = New-Object System.Drawing.Font("Segoe UI Semibold", 9.5, [System.Drawing.FontStyle]::Bold)
@@ -426,8 +465,8 @@ $cardRight.Controls.Add($btnAnalyze)
 
 $btnReplay = New-Object System.Windows.Forms.Button
 $btnReplay.Text = "Bu tonla seslendir"
-$btnReplay.Location = New-Object System.Drawing.Point(14, 284)
-$btnReplay.Size = New-Object System.Drawing.Size(186, 34)
+$btnReplay.Location = New-Object System.Drawing.Point(14, 324)
+$btnReplay.Size = New-Object System.Drawing.Size(186, 30)
 $btnReplay.FlatStyle = "Flat"
 $btnReplay.FlatAppearance.BorderSize = 0
 $btnReplay.Font = New-Object System.Drawing.Font("Segoe UI", 8.5)
@@ -437,8 +476,8 @@ $cardRight.Controls.Add($btnReplay)
 
 $btnStop = New-Object System.Windows.Forms.Button
 $btnStop.Text = "Durdur"
-$btnStop.Location = New-Object System.Drawing.Point(208, 284)
-$btnStop.Size = New-Object System.Drawing.Size(74, 34)
+$btnStop.Location = New-Object System.Drawing.Point(208, 324)
+$btnStop.Size = New-Object System.Drawing.Size(74, 30)
 $btnStop.FlatStyle = "Flat"
 $btnStop.FlatAppearance.BorderSize = 0
 $btnStop.Font = New-Object System.Drawing.Font("Segoe UI", 8.5)
@@ -448,8 +487,8 @@ $cardRight.Controls.Add($btnStop)
 
 $btnFolder = New-Object System.Windows.Forms.Button
 $btnFolder.Text = "Klasör"
-$btnFolder.Location = New-Object System.Drawing.Point(290, 284)
-$btnFolder.Size = New-Object System.Drawing.Size(72, 34)
+$btnFolder.Location = New-Object System.Drawing.Point(290, 324)
+$btnFolder.Size = New-Object System.Drawing.Size(72, 30)
 $btnFolder.FlatStyle = "Flat"
 $btnFolder.FlatAppearance.BorderSize = 0
 $btnFolder.Font = New-Object System.Drawing.Font("Segoe UI", 8.5)
@@ -459,13 +498,13 @@ $cardRight.Controls.Add($btnFolder)
 # --- Kisisel anlatim tarzi (kalici) ---
 $lblStyle = New-Object System.Windows.Forms.Label
 $lblStyle.Text = "ANLATIM TARZIM  —  nasıl konuşayım, neyi önemseyeyim? (bir kez yazın, kaydedilir)"
-$lblStyle.Location = New-Object System.Drawing.Point(18, 476)
+$lblStyle.Location = New-Object System.Drawing.Point(18, 502)
 $lblStyle.Size = New-Object System.Drawing.Size(760, 16)
 $lblStyle.Font = New-Object System.Drawing.Font("Segoe UI", 7.5)
 $form.Controls.Add($lblStyle)
 
 $txtStyle = New-Object System.Windows.Forms.TextBox
-$txtStyle.Location = New-Object System.Drawing.Point(16, 494)
+$txtStyle.Location = New-Object System.Drawing.Point(16, 520)
 $txtStyle.Size = New-Object System.Drawing.Size(760, 64)
 $txtStyle.Multiline = $true
 $txtStyle.ScrollBars = "Vertical"
@@ -475,14 +514,14 @@ $form.Controls.Add($txtStyle)
 # --- Alt: cikti ---
 $lblOut = New-Object System.Windows.Forms.Label
 $lblOut.Text = "ANLATIM METNİ"
-$lblOut.Location = New-Object System.Drawing.Point(18, 568)
+$lblOut.Location = New-Object System.Drawing.Point(18, 588)
 $lblOut.Size = New-Object System.Drawing.Size(240, 16)
 $lblOut.Font = New-Object System.Drawing.Font("Segoe UI", 7.5)
 $form.Controls.Add($lblOut)
 
 $txtOut = New-Object System.Windows.Forms.TextBox
-$txtOut.Location = New-Object System.Drawing.Point(16, 586)
-$txtOut.Size = New-Object System.Drawing.Size(760, 104)
+$txtOut.Location = New-Object System.Drawing.Point(16, 606)
+$txtOut.Size = New-Object System.Drawing.Size(760, 96)
 $txtOut.Multiline = $true
 $txtOut.ReadOnly = $true
 $txtOut.ScrollBars = "Vertical"
@@ -490,15 +529,15 @@ $txtOut.BorderStyle = "FixedSingle"
 $form.Controls.Add($txtOut)
 
 $lblStatus = New-Object System.Windows.Forms.Label
-$lblStatus.Text = "Hazır. Bir görsel seçerek başlayın."
-$lblStatus.Location = New-Object System.Drawing.Point(50, 700)
+$lblStatus.Text = "Hazır. Bir görsel, ses, video veya metin dosyası seçerek başlayın."
+$lblStatus.Location = New-Object System.Drawing.Point(50, 712)
 $lblStatus.Size = New-Object System.Drawing.Size(724, 22)
 $lblStatus.Font = New-Object System.Drawing.Font("Segoe UI", 8.5, [System.Drawing.FontStyle]::Italic)
 $form.Controls.Add($lblStatus)
 
 # --- Loader (donen halka + animasyonlu noktalar) ---
 $spinner = New-Object System.Windows.Forms.PictureBox
-$spinner.Location = New-Object System.Drawing.Point(16, 698)
+$spinner.Location = New-Object System.Drawing.Point(16, 710)
 $spinner.Size = New-Object System.Drawing.Size(26, 26)
 $spinner.SizeMode = "Zoom"
 $spinner.Visible = $false
@@ -541,16 +580,16 @@ $spinTimer.Add_Tick({
 })
 
 $progress = New-Object System.Windows.Forms.ProgressBar
-$progress.Location = New-Object System.Drawing.Point(16, 726)
+$progress.Location = New-Object System.Drawing.Point(16, 738)
 $progress.Size = New-Object System.Drawing.Size(760, 6)
 $progress.Style = "Marquee"
 $progress.MarqueeAnimationSpeed = 0
 $form.Controls.Add($progress)
 
 $lblHint = New-Object System.Windows.Forms.Label
-$lblHint.Text = "İpucu: 'Anlatım Tarzım' kutusuna kendi üslubunuzu yazın (örn. kısa ve esprili, fiyatları söyle). Önce 'Anlat ve Dinle' ile metni çıkarın; sonra tonu veya süreyi değiştirip 'Bu tonla seslendir' ile modeli tekrar çalıştırmadan karşılaştırın."
-$lblHint.Location = New-Object System.Drawing.Point(18, 738)
-$lblHint.Size = New-Object System.Drawing.Size(756, 44)
+$lblHint.Text = "İpucu: Görsel, ses, video (ffmpeg gerekir) veya metin yükleyebilirsiniz. 'Anlatım Uzunluğu' ile kısa/normal/detaylı seçin; emin olunmayan veya güncel bilgi için 'internette araştır' işaretleyin. 'Anlatım Tarzım' kutusu kalıcıdır."
+$lblHint.Location = New-Object System.Drawing.Point(18, 750)
+$lblHint.Size = New-Object System.Drawing.Size(756, 36)
 $lblHint.Font = New-Object System.Drawing.Font("Segoe UI", 7.5)
 $form.Controls.Add($lblHint)
 
@@ -589,14 +628,14 @@ function Apply-Theme([bool]$Dark) {
     $lblNoImg.ForeColor  = $p.Muted
     $lblNoImg.BackColor  = $p.SurfaceHi
 
-    foreach ($l in @($lblTone, $lblDur, $lblQ, $lblOut, $lblStyle)) { $l.ForeColor = $p.Muted }
+    foreach ($l in @($lblTone, $lblLevel, $lblDur, $lblQ, $lblOut, $lblStyle)) { $l.ForeColor = $p.Muted }
 
-    foreach ($c in @($cmbTone, $numDur, $txtQ, $txtOut, $txtStyle)) {
+    foreach ($c in @($cmbTone, $cmbLevel, $numDur, $txtQ, $txtOut, $txtStyle)) {
         $c.BackColor = $p.SurfaceHi
         $c.ForeColor = $p.Text
     }
 
-    foreach ($l in @($lblDurUnit, $lblDurHint, $chkNatural, $lblHint)) { $l.ForeColor = $p.Muted }
+    foreach ($l in @($lblDurUnit, $lblDurHint, $chkNatural, $chkResearch, $lblHint)) { $l.ForeColor = $p.Muted }
 
     $btnAnalyze.BackColor = $p.Primary
     $btnAnalyze.ForeColor = $p.OnPrimary
@@ -626,6 +665,7 @@ function Apply-Theme([bool]$Dark) {
 # Durum / yardimcilar
 # ---------------------------------------------------------------------------
 $script:imagePath = $null
+$script:mediaKind = $null
 $script:lastText  = $null
 $script:player    = New-Object System.Media.SoundPlayer
 $script:dragging  = $false
@@ -674,6 +714,32 @@ function Get-SelectedTone {
     $i = $cmbTone.SelectedIndex
     if ($i -lt 0) { return "normal" }
     return $ToneOrder[$i]
+}
+
+function Get-SelectedLevel {
+    switch ($cmbLevel.SelectedIndex) {
+        0 { return "kisa" }
+        2 { return "detayli" }
+        default { return "normal" }
+    }
+}
+
+function Get-DefaultQuestion([string]$Kind) {
+    switch ($Kind) {
+        "audio" { return "Bu ses kaydında ne anlatılıyor? Kısa ve doğal Türkçeyle özetle." }
+        "video" { return "Bu videoda ne oluyor? Kısa ve doğal Türkçeyle anlat." }
+        "text"  { return "Bu metin ne anlatıyor? Kısa ve doğal Türkçeyle özetle." }
+        default { return "Bu görselde ne var? Kısa ve doğal Türkçeyle anlat." }
+    }
+}
+
+function Get-KindLabel([string]$Kind) {
+    switch ($Kind) {
+        "audio" { return "Ses" }
+        "video" { return "Video" }
+        "text"  { return "Metin" }
+        default { return "Görsel" }
+    }
 }
 
 function Get-TargetSeconds {
@@ -750,38 +816,75 @@ $btnTheme.Add_Click({
 
 $btnPick.Add_Click({
     $dlg = New-Object System.Windows.Forms.OpenFileDialog
-    $dlg.Title = "Bir görsel seçin"
-    $dlg.Filter = "Resim dosyaları|*.jpg;*.jpeg;*.png;*.bmp;*.gif;*.webp|Tüm dosyalar|*.*"
+    $dlg.Title = "Görsel, ses, video veya metin seçin"
+    $dlg.Filter = "Desteklenen dosyalar|*.jpg;*.jpeg;*.png;*.bmp;*.gif;*.webp;*.wav;*.mp3;*.flac;*.ogg;*.m4a;*.mp4;*.mkv;*.mov;*.webm;*.avi;*.txt;*.md|Görsel|*.jpg;*.jpeg;*.png;*.bmp;*.gif;*.webp|Ses|*.wav;*.mp3;*.flac;*.ogg;*.m4a|Video|*.mp4;*.mkv;*.mov;*.webm;*.avi|Metin|*.txt;*.md|Tüm dosyalar|*.*"
     if ($dlg.ShowDialog() -ne [System.Windows.Forms.DialogResult]::OK) { return }
 
-    try {
-        $img = [System.Drawing.Image]::FromFile($dlg.FileName)
-        $bmp = New-Object System.Drawing.Bitmap $img
-        $img.Dispose()
-        if ($pic.Image) { $pic.Image.Dispose() }
-        $pic.Image = $bmp
-        $lblNoImg.Visible = $false
-    } catch {
-        [void][System.Windows.Forms.MessageBox]::Show("Görsel açılamadı:`n$($_.Exception.Message)", "Hata")
+    $kind = Get-MediaKind $dlg.FileName
+    if ($kind -eq "unknown") {
+        [void][System.Windows.Forms.MessageBox]::Show("Bu dosya türü desteklenmiyor. Görsel, ses, video veya metin seçin.", "Desteklenmeyen dosya")
         return
     }
 
+    if ($kind -eq "image") {
+        try {
+            $img = [System.Drawing.Image]::FromFile($dlg.FileName)
+            $bmp = New-Object System.Drawing.Bitmap $img
+            $img.Dispose()
+            if ($pic.Image) { $pic.Image.Dispose() }
+            $pic.Image = $bmp
+            $lblNoImg.Visible = $false
+        } catch {
+            [void][System.Windows.Forms.MessageBox]::Show("Görsel açılamadı:`n$($_.Exception.Message)", "Hata")
+            return
+        }
+    } else {
+        if ($pic.Image) { $pic.Image.Dispose(); $pic.Image = $null }
+        $lblNoImg.Text = "$(Get-KindLabel $kind) dosyası`r`n`r`n$([System.IO.Path]::GetFileName($dlg.FileName))"
+        $lblNoImg.Visible = $true
+        $lblNoImg.BringToFront()
+    }
+
     $script:imagePath = $dlg.FileName
+    $script:mediaKind = $kind
     $script:lastText  = $null
     $lblPath.Text = $dlg.FileName
     $txtOut.Text = ""
-    Set-Busy $false "Görsel yüklendi. Ton ve süre seçip 'ANLAT VE DİNLE' butonuna basın."
+
+    # Soru kutusu hala otomatik metinse yeni medya turune gore guncelle
+    $currentQ = $txtQ.Text.Trim()
+    $isAuto = [string]::IsNullOrWhiteSpace($currentQ)
+    foreach ($k in @("image", "audio", "video", "text")) {
+        if ($currentQ -eq (Get-DefaultQuestion $k)) { $isAuto = $true }
+    }
+    if ($isAuto) { $txtQ.Text = Get-DefaultQuestion $kind }
+
+    Set-Busy $false "$(Get-KindLabel $kind) yüklendi. Ton ve süre seçip 'ANLAT VE DİNLE' butonuna basın."
 })
 
 $btnAnalyze.Add_Click({
     if (-not $script:imagePath) { return }
     try {
-        Set-Busy $true "Görsel analiz ediliyor... (yaklaşık 5-15 saniye)"
-        $q = $txtQ.Text.Trim()
-        if ([string]::IsNullOrWhiteSpace($q)) { $q = "Bu görselde ne var? En fazla iki cümleyle, doğal konuşma dilinde Türkçe anlat." }
+        $kind = $script:mediaKind
+        if (-not $kind) { $kind = "image" }
+        $level = Get-SelectedLevel
+        $research = $chkResearch.Checked
 
-        $script:lastText = Get-Description -ImagePath $script:imagePath -Question $q -Style (Save-Style)
-        $txtOut.Text = "METİN: " + $script:lastText
+        $msg = "$(Get-KindLabel $kind) analiz ediliyor... (yaklaşık 5-15 saniye)"
+        if ($research) { $msg = "Araştırma yapılıyor, ardından içerik analiz ediliyor..." }
+        Set-Busy $true $msg
+
+        $q = $txtQ.Text.Trim()
+        if ([string]::IsNullOrWhiteSpace($q)) { $q = Get-DefaultQuestion $kind }
+
+        $res = Get-ContentSummary -MediaPath $script:imagePath -MediaKind $kind -Question $q `
+                    -Style (Save-Style) -Level $level -Research $research
+
+        $script:lastText = $res.Text
+        $txtOut.Text = "METİN: " + $res.Text
+        if ($res.Sources.Count -gt 0) {
+            $txtOut.AppendText("`r`nKAYNAK: " + ($res.Sources -join " | "))
+        }
 
         Start-Speech
     } catch {

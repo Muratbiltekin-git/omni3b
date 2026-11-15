@@ -20,9 +20,13 @@ Görsel  ──▶  Qwen2.5-Omni-3B (GGUF / llama.cpp)  ──▶  Türkçe meti
 ## Özellikler
 
 - **Çift tıklanabilir arayüz** — `anlat.cmd`'ye çift tıklayın, WinForms arayüzü açılır.
+- **Çok türlü girdi** — görsel, **ses**, **video** (ffmpeg gerekir) ve **metin** dosyaları.
 - **8 konuşma tonu** — sakin, hızlı, dramatik, çocuk sesi vb.
+- **Anlatım uzunluğu** — kısa (tek cümle), normal (≤2 cümle), detaylı (4–6 cümle).
+- **İnternette araştırma** — emin olunmayan / güncel konular Wikipedia ve DuckDuckGo'dan
+  araştırılır, kaynak adı belirtilir (API anahtarı gerekmez).
 - **Kendi ağzınızdan anlatım** — kalıcı "Anlatım Tarzım" kutusu; neyi önemsediğinizi bir kez
-  yazın, her görselde o üslupla konuşsun.
+  yazın, her içerikte o üslupla konuşsun.
 - **Konuşma süresi kontrolü (1–50 sn)** — hedef süreye otomatik oturtulur, perde bozulmaz.
 - **Akıllı akış** — model sadece bir kez çalışır; ton/süre değiştirince metin yeniden
   üretilmeden **anında** yeni ses çıkar.
@@ -41,7 +45,8 @@ Görsel  ──▶  Qwen2.5-Omni-3B (GGUF / llama.cpp)  ──▶  Türkçe meti
 | Ekran kartı | NVIDIA 4 GB VRAM | CUDA 12.4. GPU yoksa CPU ile de çalışır (çok yavaş) |
 | RAM | 8 GB | 16 GB önerilir |
 | Disk | ~5 GB boş alan | Modeller + çalıştırılabilir dosyalar |
-| İnternet | Sadece kurulumda | `setup.ps1` dosyaları indirir |
+| İnternet | Sadece kurulumda | `setup.ps1` dosyaları indirir; araştırma özelliği de internet ister |
+| ffmpeg | İsteğe bağlı | Yalnızca **video** girdisi için (`winget install Gyan.FFmpeg`) |
 
 
 ## Kurulum
@@ -78,11 +83,19 @@ Seçenekler:
 
 `anlat.cmd` dosyasına **çift tıklayın**.
 
-1. **Görsel Seç** → dosyayı seçin (önizleme görünür)
+1. **Dosya Seç** → görsel, ses, video veya metin (görselde önizleme görünür)
 2. **SES TONU** → listeden ton seçin
-3. **KONUŞMA SÜRESİ** → 1–50 saniye arası hedef (veya *"Doğal hızda bırak"*)
-4. **ANLAT VE DİNLE** → model görseli analiz eder ve seslendirir
-5. Tonu/süreyi değiştirip **"Bu tonla seslendir"** → model tekrar çalışmadan yeni ses üretilir
+3. **ANLATIM UZUNLUĞU** → kısa / normal / detaylı
+4. **KONUŞMA SÜRESİ** → 1–50 saniye arası hedef (veya *"Doğal hızda bırak"*)
+5. **ANLAT VE DİNLE** → model içeriği analiz eder ve seslendirir
+6. Tonu/süreyi değiştirip **"Bu tonla seslendir"** → model tekrar çalışmadan yeni ses üretilir
+
+**İnternette araştır** kutusu işaretlenirse model, görsele/soruya bağlı konuyu Wikipedia
+(Türkçe → İngilizce) ve DuckDuckGo üzerinden araştırır; cevabın altında kaynak adı yazar.
+Araştırma sırasında bağlam 3072'ye çıkar, bu yüzden biraz daha yavaştır.
+
+Video için **ffmpeg** gerekir (`winget install Gyan.FFmpeg`). ffmpeg yoksa video seçildiğinde
+açıklayıcı bir hata verir.
 
 ### Kendi ağzınızdan anlatım
 
@@ -118,6 +131,11 @@ modele verilir. Tarz kutusunu boş bırakırsanız tarz dosyası silinir ve sade
 ```powershell
 .\describe.ps1 -Image foto.jpg -Style "Kısa ve esprili konuşurum, fiyatları söylerim."
 .\describe.ps1 -Image foto.jpg -NoStyle        # tarzı yok say, sade anlat
+.\describe.ps1 -Image foto.jpg -Level detayli  # 4-6 cümle, ayrıntılı
+.\describe.ps1 -Image foto.jpg -Level kisa -Research "Bu yapı hangi döneme ait?"
+.\describe.ps1 -Image kayit.mp3                # ses kaydı
+.\describe.ps1 -Image video.mp4                # video (ffmpeg gerekir)
+.\describe.ps1 -Image notlar.txt               # metin dosyası
 ```
 
 Çıktılar `output\anlatim-<ton>-<tarih>.wav` ve aynı isimli `.txt` olarak kaydedilir.
@@ -132,10 +150,12 @@ modele verilir. Tarz kutusunu boş bırakırsanız tarz dosyası silinir ve sade
 
 ## Sınırlar (dürüst notlar)
 
-- **Arayüz analiz sırasında kısa süre donar** (5–15 sn). Model tek parça çalıştığı için
-  spinner yalnızca işlemin başında ve sonunda akıcı görünür. Bunu Runspace'e taşımak
-  mümkündür; henüz yapılmadı.
+- **Arayüz analiz sırasında kısa süre donar** (5–15 sn; detaylı/araştırmada daha uzun).
+  Model tek parça çalıştığı için spinner yalnızca işlemin başında ve sonunda akıcı görünür.
+  Bunu Runspace'e taşımak mümkündür; henüz yapılmadı.
 - **Türkçe konuşma tanıma zayıftır** (`run-audio.cmd`). Seslendirme ve görsel anlatım iyi.
+- **Araştırma internete bağlıdır** ve Wikipedia/DuckDuckGo ile sınırlıdır; sonuç yoksa model
+  yalnızca gördüğüne dayanır ve bunu belirtir.
 - **4 GB VRAM hedeflenmiştir.** Daha büyük bağlam veya `Q8_0` model bu kartta taşmaz.
 - Yalnızca **Windows** için paketlenmiştir (WinForms arayüzü ve `.cmd` başlatıcılar).
 

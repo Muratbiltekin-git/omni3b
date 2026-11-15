@@ -131,7 +131,35 @@ insan sesi (kadın/erkek) değil**. Gerçek farklı konuşmacılar isterseniz ik
 ```powershell
 .\describe.ps1 -Image foto.jpg -Tone dramatik -NoPlay      # üret, çalma
 .\describe.ps1 -Image foto.jpg -Tone cocuk -Repeat 2       # iki kez dinle
+.\describe.ps1 -Image video.mp4 -Level detayli             # videoyu ayrıntılı anlat
+.\describe.ps1 -Image notlar.txt -Level kisa               # metni tek cümleyle özetle
+.\describe.ps1 -Image kayit.mp3                            # ses kaydını yazıya çevir + oku
+.\describe.ps1 -Image foto.jpg -Research "Bu bina hangi yıl yapıldı?"
 ```
+
+## Girdi türleri, uzunluk ve araştırma
+
+| Girdi | Uzantılar | Not |
+|---|---|---|
+| Görsel | jpg, jpeg, png, bmp, gif, webp | Doğrudan modele verilir |
+| Ses | wav, mp3, flac, ogg, m4a | Omni modelinin ses girişiyle çözülür |
+| Video | mp4, mkv, mov, webm, avi | **ffmpeg** gerekir; 4 kare çıkarılır |
+| Metin | txt, md | İlk 1200 karakter prompt'a eklenir |
+
+**Uzunluk (`-Level` / arayüzde "Anlatım Uzunluğu"):**
+
+| Değer | Anlamı | Token |
+|---|---|---|
+| `kisa` | Tek cümle (en fazla ~18 kelime) | 110 |
+| `normal` | En fazla iki cümle (varsayılan) | 200 |
+| `detayli` | 4–6 cümle, özet + ayrıntı | 420 |
+
+**Araştırma (`-Research` / arayüzde onay kutusu):** Soruya bağlı konu Türkçe Wikipedia,
+sonra İngilizce Wikipedia, en son DuckDuckGo üzerinden aranır. Bulunan özet prompt'a
+"güvenilir kaynak" olarak eklenir, kaynak adı çıktıda gösterilir. Bağlam 3072'ye çıkar.
+API anahtarı gerekmez. Sonuç bulunamazsa model yalnızca gördüğüne dayanır ve bunu belirtir.
+
+Video için ffmpeg yoksa: `winget install Gyan.FFmpeg` (veya `choco install ffmpeg`).
 
 ## Teknik notlar
 
@@ -157,6 +185,7 @@ omni3b\
 ├── output\           üretilen .wav ve .txt dosyaları
 ├── gui.ps1           arayüz (WinForms)
 ├── describe.ps1      komut satırı hattı (ton destekli)
+├── cekirdek.ps1      ortak çekirdek (medya türü, prompt, model, araştırma)
 ├── benim-tarzim.ornek.txt  tarz dosyası örneği
 ├── benim-tarzim.txt  kişisel tarzınız (arayüz oluşturur)
 ├── anlat.cmd         çift tık → arayüz / argümanlı → CLI
